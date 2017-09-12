@@ -1,10 +1,10 @@
-# RHEL/CentOS 7 Kickstart Generator 
+# RHEL/CentOS 7+ Kickstart Generator 
 
-## autokick.sh (0.2)
+## autokick.sh (0.3)
 
 ## Synopsis
 
-This program allows multiple CentOS/RHEL 7 machines to be installed simultaneously using KVM virtualization. It generates Kickstart files on the fly to be used by the installer. 
+This program allows multiple CentOS/RHEL 7+ machines to be installed simultaneously using KVM virtualization. It generates Kickstart files on the fly to be used by the installer. 
 
 ## Requirements
 KVM/Libvirt, Running webserver containing extracted ISO, Superuser privileges.
@@ -19,6 +19,8 @@ webserverdir – Local directory of Kickstart files.
 
 libvirtdir – Local directory of libvirt image files.
 
+Tested on CentOS 7.3.1611.
+
 ## Notes
 
 Passwords are hashed and dropped into the KS file being created.
@@ -29,6 +31,6 @@ Networking is automatically configured using DHCP to assign IP addresses.
 
 ## License
 
-Copyright 2015-16, Matthew Wilson.
+Copyright 2015-17, Matthew Wilson.
 License GPLv3+: GNU GPL version 3 or later http://gnu.org/licenses/gpl.html.
 No warranty. Software provided as is.
