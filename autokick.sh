@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AUTOKICK.SH 0.2 - (c) 2016 MWILSON
+# AUTOKICK.SH 0.3 - (c) 2017 MWILSON
 
 #This program is free software: you can redistribute it and/or modify
 #it under the terms of the GNU General Public License as published by
@@ -18,21 +18,21 @@
 # It presupposes an a running webserver hosting the extracted ISO and Kickstart file.
 # Must be run with superuser privileges.
 
-# Tested with CentOS 7 x86_64
+# Tested with CentOS 7.3 x86_64
 
 #READ COMMENTS BELOW TO FINE TUNE WEB SERVER FILE ROOT AND IP ADDRESSES
 
 #POINT TO URL OF EXTRACTED ISO
-installtreeloc="http://XXX.XXX.XXX.XXX/ks/iso/rh/"
+installtreeloc="http://192.168.1.109:59669/ks/iso/centos"
 
 #POINT TO URL OF DIRECTORY THAT WILL CONTAIN KICKSTART FILES
-ksurldir="http://XXX.XXX.XXX.XXX/ks/"
+ksurldir="http://192.168.1.109:59669/ks/"
 
 #LOCATION OF WEBSERVER DIR FOR KICKSTART FILES
 webserverdir="/var/www/html/ks/"
 
 #DIRECTORY CONTRAINING LIBVIRT IMAGES
-libvirtdir="/var/lib/libvirt/images/"
+libvirtdir="/vm/img/"
 
 #REQUIRED TO USE VIRSH CONSOLE
 extraargs="console=tty0 console=ttyS0,115200n8 ip=dhcp"
@@ -41,17 +41,101 @@ clear
 
 if [ ! -e "/usr/bin/virt-install" ] ; then
 	echo "virt-install not installed, exiting"
-	exit
+	exit 1
 fi
 
 echo "AUTOKICK - Make multiple similar VMs using Kickstart!"
 
+discsize="16"
+ramsize="2048"
+cpus="1"
+
+echo "Size of disk(s) to be created (GB): $discsize" 
+echo "Ram (MB) per machine: $ramsize"
+echo "VCPUs per machine: $cpus"
+
+while true 
+do
+	read -p "Edit default system settings? (Y/N) " defs
+
+	if [ "$defs" == "n" ] || [ "$defs" == "N" ] || [ "$defs" == "no" ] ; then
+		break;
+	
+	elif  [ "$defs" == "y" ] || [ "$defs" == "Y" ] || [[ "$defs" == "yes" ]]; then
+
+		while true
+		do
+	
+			read -e -i "$discsize" -p "Size of disk(s) to be created (GB). Default: " input
+			discsize="${input:-$discsize}"
+			
+			if ! [[ "$discsize" =~ ^[0-9]+$ ]] ; then
+				echo "Error"
+				discsize="16"
+				continue;
+			fi
+
+			if [[ "$discsize" -lt 8 ]] ; then
+				echo "Error: 8 GB disk required for this install"
+				discsize="16"
+				continue;
+			else
+				break;
+			fi
+
+		done
+			
+		while true
+		do
+			read -e -i "$ramsize" -p "Ram (MB) per machine. Default: " input
+			ramsize="${input:-$ramsize}"
+
+			if ! [[ "$ramsize" =~ ^[0-9]+$ ]] ; then
+				echo "Error"
+				ramsize="2048"
+				continue;
+			fi
+
+			if [[ "$ramsize" -lt 1280 ]] ; then
+				echo "Error: 1280 MB Ram required for this install"
+				ramsize="2048"
+				continue;
+			else
+				break;
+			fi
+		done
+
+		while true 
+		do
+			read -e -i "$cpus" -p "VCPUs per machine. Default: " input
+			cpus="${input:-$cpus}"
+			actualcpucnt=$(nproc) # get actual cpu count
+		
+			if ! [[ "$cpus" =~ ^[0-9]+$ ]] ; then
+				echo "Error"
+				cpus="1"
+				continue;
+			fi
+
+			if [[ ! cpus -lt 1 ]] && [[ ! cpus -gt actualcpucnt ]] ; then
+				echo "$cpus"
+				break;
+			else				
+				echo "Error: Max VCPU is: $actualcpucnt"
+				cpus="1"
+				continue;
+			fi
+		done
+		break;
+	fi
+done
+
 while true
 do
-	read -p "Number of machines? " machnum
+	read -p "Number of virtual machines to launch? " machnum
 
 	if [[ "$machnum" =~ ^[0-9]+$ ]] && [[ $machnum -gt 0 ]]; then
-		break
+		break;
 	else
 		echo "Try again."
 	fi
@@ -64,17 +148,6 @@ if [ -e "${libvirtdir}${discq}-1.img" ]; then
         exit
 fi
 
-discsize="8"
-read -e -i "$discsize" -p "Size of disk(s) to be created (GB). Default: " input
-discsize="${input:-$discsize}"
-
-ramsize="1024"
-read -e -i "$ramsize" -p "Ram (MB) per machine. Default: " input
-ramsize="${input:-$ramsize}"
-
-cpus="1"
-read -e -i "$cpus" -p "VCPUs per machine. Default: " input
-cpus="${input:-$cpus}"
 
 while true
 do
@@ -100,24 +173,33 @@ install
 text
 lang en_US.UTF-8
 keyboard --vckeymap=us --xlayouts='us'
-timezone America/New_York
+timezone America/New_York --isUtc
 auth --enableshadow --passalgo=sha512
-selinux --enforcing
-firewall --enabled --service=ssh
-services --enabled=NetworkManager,sshd
+#selinux --enforcing
+#firewall --enabled --service=ssh
+#services --enabled=NetworkManager,sshd
 eula --agreed
-ignoredisk --only-use=vda
 reboot 
 
+ignoredisk --only-use=vda
+clearpart --none --initlabel
 bootloader --location=mbr --boot-drive=vda
 zerombr
-clearpart --all --drives=vda
-autopart --type=lvm
+
+part /boot --size=512 --ondisk vda --fstype=ext4
+part pv.01 --size=1 --ondisk vda --grow
+volgroup vg1 pv.01
+logvol / --vgname=vg1 --size=10000 --name=root --fstype=ext4 --grow
+logvol swap --vgname=vg1 --recommended --name=swap --fstype=swap
 
 rootpw --iscrypted ${hashrootsed}
 
 %packages
 @core
+#chrony
+%end
+
+%addon com_redhat_kdump --disable --reserve-mb='auto'
 %end
 
 #give random numbered hostname to machine
@@ -138,21 +220,31 @@ yum -y update
 #%end
 
 endmsg
-		
+
+	#IF THIS EXISTS EXIT
+	#echo $webserverdir${discq}-${i}.cfg
+	#exit;
+
+
 	#FINALLY ADD THE EXTRA CONSOLE ARGS TO KS LOCATION AND BEGIN VIRT-INSTALL
 	kickstartloc="${extraargs} ks=${ksurldir}${discq}-${i}.cfg"
 		
  	echo "VM: ${discq}-${i} using ${libvirtdir}$discq-${i}.img (${discsize} GB) will be created"
         diskpathname="${libvirtdir}${discq}-${i}.img"
         
-	#MORE THAN ONE MACHINE, SEND INSTALL TO BACKGROUND 
+	#MORE THAN ONE MACHINE, SEND INSTALL TO BACKGROUND
+	
+	# --network bridge=virbr0 maybe
+
 	if [ ${machnum} -gt "1" ]; then
 		nohup virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}" &>/dev/null &
 	else
 		virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}"
 	fi
 
-	sleep 5
+	sleep 10
 done
 
 exit
+
+
