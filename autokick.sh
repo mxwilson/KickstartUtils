@@ -221,10 +221,6 @@ yum -y update
 
 endmsg
 
-	#IF THIS EXISTS EXIT
-	#echo $webserverdir${discq}-${i}.cfg
-	#exit;
-
 
 	#FINALLY ADD THE EXTRA CONSOLE ARGS TO KS LOCATION AND BEGIN VIRT-INSTALL
 	kickstartloc="${extraargs} ks=${ksurldir}${discq}-${i}.cfg"
@@ -238,11 +234,14 @@ endmsg
 
 	if [ ${machnum} -gt "1" ]; then
 		nohup virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}" &>/dev/null &
+		echo $diskpathname
+
 	else
-		virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}"
+	virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}"
+	
 	fi
 
-	sleep 10
+	sleep 5 
 done
 
 exit
