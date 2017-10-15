@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AUTOKICK.SH 0.3 - (c) 2017 MWILSON
+# AUTOKICK.SH 0.3.1 (c)2017 MWILSON <https://github.com/mxwilson/KickstartUtils>
 
 #This program is free software: you can redistribute it and/or modify
 #it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@
 #READ COMMENTS BELOW TO FINE TUNE WEB SERVER FILE ROOT AND IP ADDRESSES
 
 #POINT TO URL OF EXTRACTED ISO
-installtreeloc="http://192.168.1.109:59669/ks/iso/centos"
+installtreeloc="http://localhost/ks/iso/centos"
 
 #POINT TO URL OF DIRECTORY THAT WILL CONTAIN KICKSTART FILES
-ksurldir="http://192.168.1.109:59669/ks/"
+ksurldir="http://localhost/ks/"
 
 #LOCATION OF WEBSERVER DIR FOR KICKSTART FILES
 webserverdir="/var/www/html/ks/"
@@ -37,10 +37,13 @@ libvirtdir="/vm/img/"
 #REQUIRED TO USE VIRSH CONSOLE
 extraargs="console=tty0 console=ttyS0,115200n8 ip=dhcp"
 
+#DELETE THE GENERATED KICKSTART FILE UPON EXIT (yes/no)
+del_kick="no"
+
 clear
 
 if [ ! -e "/usr/bin/virt-install" ] ; then
-	echo "virt-install not installed, exiting"
+	echo "Error: virt-install not installed, exiting"
 	exit 1
 fi
 
@@ -118,7 +121,6 @@ do
 			fi
 
 			if [[ ! cpus -lt 1 ]] && [[ ! cpus -gt actualcpucnt ]] ; then
-				echo "$cpus"
 				break;
 			else				
 				echo "Error: Max VCPU is: $actualcpucnt"
@@ -148,7 +150,6 @@ if [ -e "${libvirtdir}${discq}-1.img" ]; then
         exit
 fi
 
-
 while true
 do
 	echo "Enter root password of machines:" ; read -r -s therootpw
@@ -175,9 +176,9 @@ lang en_US.UTF-8
 keyboard --vckeymap=us --xlayouts='us'
 timezone America/New_York --isUtc
 auth --enableshadow --passalgo=sha512
-#selinux --enforcing
-#firewall --enabled --service=ssh
-#services --enabled=NetworkManager,sshd
+selinux --enforcing
+firewall --enabled --service=ssh
+services --enabled=NetworkManager,sshd
 eula --agreed
 reboot 
 
@@ -196,7 +197,9 @@ rootpw --iscrypted ${hashrootsed}
 
 %packages
 @core
-#chrony
+tmux
+vim
+net-tools
 %end
 
 %addon com_redhat_kdump --disable --reserve-mb='auto'
@@ -211,16 +214,19 @@ echo "network --device=eth0 --bootproto=dhcp --noipv6 --activate --hostname=`ech
 
 %include /tmp/ks-network-hostname
 
+#update the system after install
+
 %post
-yum -y update
+#yum -y update
 %end
+
+#add additional users if required
 
 #%post --interpreter /bin/bash
 #useradd -p 'some encrypted password' someusername
 #%end
 
 endmsg
-
 
 	#FINALLY ADD THE EXTRA CONSOLE ARGS TO KS LOCATION AND BEGIN VIRT-INSTALL
 	kickstartloc="${extraargs} ks=${ksurldir}${discq}-${i}.cfg"
@@ -230,20 +236,31 @@ endmsg
         
 	#MORE THAN ONE MACHINE, SEND INSTALL TO BACKGROUND
 	
-	# --network bridge=virbr0 maybe
-
 	if [ ${machnum} -gt "1" ]; then
 		nohup virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}" &>/dev/null &
-		echo $diskpathname
-
+		sleep 10
 	else
-	virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}"
-	
-	fi
-
-	sleep 5 
+		virt-install --name=${discq}-${i} --disk path=${diskpathname},size=${discsize} --ram=${ramsize} --vcpus=${cpus} --os-variant=rhel7 --accelerate --nographics --location=${installtreeloc} --extra-args="${kickstartloc}"
+	fi  
 done
 
+#delete the generated Kickstart file
+
+if [ "$del_kick" == "yes" ] ; then
+	for (( i=1; i<=machnum; i++ ))
+	do
+		sleep 10
+		pgrep virt-install
+		res=$?
+
+		if [[ "$res" -eq 1 ]] ; then 
+			echo "Deleting Kickstart file: ${discq}-${i}.cfg"
+			rm ${webserverdir}${discq}-${i}.cfg
+		else
+			sleep 5
+			continue;	
+		fi
+	done
+fi
+
 exit
-
-

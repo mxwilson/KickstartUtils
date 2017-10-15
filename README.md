@@ -1,6 +1,6 @@
 # RHEL/CentOS 7+ Kickstart Generator 
 
-## autokick.sh (0.3)
+## autokick.sh (0.3.1)
 
 ## Synopsis
 
